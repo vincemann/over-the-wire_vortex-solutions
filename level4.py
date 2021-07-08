@@ -77,8 +77,8 @@ def compose_downloaded_files(level):
     local_libc = local_dir + "/lib32/libc.so.6"
 
 
-s = connect_to_vm("4", "2YmgK1=jw", remote=False)
-# s = connect("4", "2YmgK1=jw")
+# s = connect_to_vm("4", "2YmgK1=jw", remote=False)
+s = connect("4", "2YmgK1=jw")
 
 # just initial value that will be updated interactively
 # this value needs to be in a certain area, otherwise everything will be aligned wrong
