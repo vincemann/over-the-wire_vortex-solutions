@@ -1,0 +1,33 @@
+set follow-fork-mode child
+set logging file /tmp/gdb-log
+set logging overwrite on
+set logging redirect on
+set logging on
+
+
+break main
+r `cat ./format-string` `cat ./format-string-payload` ./vortex4
+c
+
+shell sleep 0.5
+
+# we are in new main now
+printf "printing env\n"
+x/10wx$esp
+set $var=(int)($esp+(4*4))
+printf "adr of AAAA\n"
+x/1wx $var
+shell sleep 0.5
+x/s **$var
+
+printf "adrs around &AAAA\n"
+x/8wx *$var
+
+printf "adr of shellcode\n"
+x/1wx *$var+4
+
+
+
+printf "show shellcode\n"
+set $var2=*$var+4
+x/s *$var2

