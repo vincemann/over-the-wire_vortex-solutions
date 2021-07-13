@@ -41,6 +41,7 @@
  * will fill a supplied 16-byte array with the digest.
  */
 
+
 /*
  * If compiled on a machine that doesn't have a 32-bit integer,
  * you just set "uint32" to the appropriate datatype for an

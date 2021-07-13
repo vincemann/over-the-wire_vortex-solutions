@@ -1,0 +1,39 @@
+set follow-fork-mode child
+
+# start like this:                                                                                                
+# env -i gdb -x gdb.script vortex-wrapper.o
+unset env COLUMNS                                                                     
+unset env LINES
+
+break main
+r `cat ./format-string` /home/kali/PycharmProjects/vortex/6/vortex/vortex6
+c
+del
+set disassembly-flavor intel
+disassemble main
+
+shell sleep 0.5
+# go to test
+b *0x080484ad
+c
+i r eax
+shell sleep 0.5
+
+
+
+
+
+#set $arg3=(int)($ebp+0x10)
+#x/1wx $arg3
+
+#shell echo format-string
+#x/1wx *$arg3+0xc
+#x/s *$arg3+0xc
+
+
+
+
+#shell sleep 0.5
+#b *0x080484be
+#c
+
