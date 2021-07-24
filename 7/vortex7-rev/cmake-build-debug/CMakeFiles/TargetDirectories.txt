@@ -1,0 +1,3 @@
+/home/kali/CLionProjects/vortex7-rev/cmake-build-debug/CMakeFiles/edit_cache.dir
+/home/kali/CLionProjects/vortex7-rev/cmake-build-debug/CMakeFiles/rebuild_cache.dir
+/home/kali/CLionProjects/vortex7-rev/cmake-build-debug/CMakeFiles/vortex7_rev.dir

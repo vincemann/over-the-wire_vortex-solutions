@@ -1,0 +1,1 @@
+/usr/bin/cc -g CMakeFiles/vortex7_rev.dir/main.c.o -o vortex7_rev 

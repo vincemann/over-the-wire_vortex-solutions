@@ -99,7 +99,7 @@ def replace_char_at_index(org_str, index, replacement):
 s = connect("7", "Y52jxHtt/")
 # s = connect_to_vm("7", "Y52jxHtt/", remote=False)
 
-reverse_script_binary_path = "./7/crc32/vortex7-rev/cmake-build-debug/vortex7_rev"
+reverse_script_binary_path = "./7/vortex7-rev/cmake-build-debug/vortex7_rev"
 
 if not VM:
     io = s.process(["id", "-u", "vortex8"])
