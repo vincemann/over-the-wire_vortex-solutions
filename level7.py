@@ -17,7 +17,7 @@ elf = None
 
 BINARY_PATH = None
 CWD = None
-VM = None
+LOCAL = None
 
 def pad(s, slen):
     return s+b"B"*(slen-len(s))
@@ -31,7 +31,7 @@ def connect(level, password):
     global elf
     global CWD
     global BINARY_PATH
-    global VM
+    global LOCAL
     global env_adr
     compose_downloaded_files(level)
     port = 2228
@@ -52,7 +52,7 @@ def connect(level, password):
 # function of local testing vm
 def connect_to_vm(level, password, remote=True):
     global CWD
-    global VM
+    global LOCAL
     global BINARY_PATH
     global ALIGNMENT_OFF
     if remote:
@@ -101,7 +101,7 @@ s = connect("7", "Y52jxHtt/")
 
 reverse_script_binary_path = "./7/vortex7-rev/cmake-build-debug/vortex7_rev"
 
-if not VM:
+if not LOCAL:
     io = s.process(["id", "-u", "vortex8"])
     vortex8_uid = int(io.recvall().decode("utf-8"))
     log.info(f"vortex8_uid: {vortex8_uid}")

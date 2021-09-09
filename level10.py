@@ -14,7 +14,7 @@ elf = None
 
 BINARY_PATH = None
 CWD = None
-VM = None
+LOCAL = None
 
 def pad(s, slen):
     return s+b"B"*(slen-len(s))
@@ -28,7 +28,7 @@ def connect(level, password,init=True):
     global elf
     global CWD
     global BINARY_PATH
-    global VM
+    global LOCAL
     compose_downloaded_files(level)
     port = 2228
     connected = False
@@ -63,7 +63,7 @@ def pad(s, slen):
 # function of local testing vm
 def connect_to_vm(level, password, remote=True):
     global CWD
-    global VM
+    global LOCAL
     global BINARY_PATH
     if remote:
         connect(level, password)

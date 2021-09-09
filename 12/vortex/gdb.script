@@ -1,0 +1,112 @@
+set disassembly-flavor intel   
+# https://stackoverflow.com/questions/5697042/command-to-suspend-a-thread-with-gdb
+
+alias gil = disassemble
+alias gili = x/2i
+alias gilr = 'x/2wx $ebp'
+
+set target-async 1
+set non-stop on
+
+
+unset env
+show env
+
+
+# before strcpy in parent
+b* 0x080486b1
+
+# at safecode
+b *0x0804865d
+
+# before call fflush in child
+#b *0x08048685     
+
+# pop eax gadget
+#b *0xf7e2b628
+# mov gadget
+#b* 0xf7e34a7f
+
+def gilparent
+b *sleep
+shell sleep 0.5
+thread apply 1 continue
+shell sleep 0.5
+thread 2
+shell sleep 0.5
+gil safecode
+shell sleep 0.5
+x/20wx $esp
+end
+
+
+# buf adr: 0xffffd540
+def overflow
+shell echo "before overflow"
+x/2wx $ebp  
+shell sleep 0.5
+si
+shell sleep 0.5
+finish
+shell sleep 0.5
+shell echo "after overflow"
+x/2wx $ebp 
+shell sleep 0.5
+si
+shell sleep 0.5
+si
+shell sleep 0.5
+shell echo "buffer:"
+x/400wx 0xffffd540
+end
+
+
+
+def gilwrite
+
+thread apply 1 continue
+shell sleep 0.5
+
+thread apply 1 continue
+shell echo "adr:"
+i r eax
+shell echo "val:"
+i r ecx
+
+shell sleep 0.5
+thread apply 1 si
+shell sleep 0.5
+thread apply 1 si
+end
+
+
+def update_got
+thread apply 1 si
+end
+
+
+                                                                        
+r `cat /tmp/docgil`
+# this will cause to halt both threads at their breakpoints
+
+
+# # this last line is essential, always include it
+shell echo done
+# set follow-fork-mode child
+# set disassembly-flavor intel
+#
+#
+#
+# unset env
+# show env
+#
+#
+# # before call fflush in child
+# b *0x08048685
+#
+# r `cat /tmp/docgil`
+#
+# x/2wx $ebp
+#
+# # this last line is essential, always include it
+# shell echo done

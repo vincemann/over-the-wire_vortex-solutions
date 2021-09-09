@@ -12,7 +12,7 @@ elf = None
 
 BINARY_PATH = None
 CWD = None
-VM = None
+LOCAL = None
 
 
 def connect(level, password):
@@ -24,7 +24,7 @@ def connect(level, password):
     global elf
     global CWD
     global BINARY_PATH
-    global VM
+    global LOCAL
     compose_downloaded_files(level)
     port = 2228
     s = ssh("vortex"+level, "176.9.9.172", password=password, cache=True, port=port)
@@ -41,7 +41,7 @@ def connect(level, password):
 # function of local testing vm
 def connect_to_vm(level, password, remote=True):
     global CWD
-    global VM
+    global LOCAL
     global BINARY_PATH
     global ALIGNMENT_OFF
     if remote:
@@ -90,7 +90,7 @@ io.recvall()
 
 io = s.process(["chmod", "a+x", "vortex-wrapper.o"], cwd=CWD)
 io.recvall()
-if VM:
+if LOCAL:
     io = s.process(["chmod", "a+x", BINARY_PATH], cwd=CWD)
     io.recvall()
 io = s.process(["vortex-wrapper.o", "sh"], cwd=CWD)
