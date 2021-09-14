@@ -31,7 +31,7 @@ def connect(level, password, init=True):
     global CWD
     global BINARY_PATH
     global LOCAL
-    compose_downloaded_files(level)
+    compose_download_paths(level)
     port = 2228
     connected = False
     s = None
@@ -46,6 +46,7 @@ def connect(level, password, init=True):
             log.info("ssh connection attempt failed")
             print("error: {0}".format(e))
             sleep(randint(1, 5))
+    load_downloaded_files()
     LOCAL = False
     CWD = "/tmp/"
     BINARY_PATH = "/vortex/vortex"+level
@@ -60,15 +61,23 @@ def connect_to_local(level, password, remote=True):
     if remote:
         connect(level, password)
     else:
-        compose_downloaded_files(level)
+        compose_download_paths(level)
     s = ssh("kali", "127.0.0.1", keyfile="/home/kali/.ssh/id_rsa", cache=True)
     CWD = "/vortex/"+level
     BINARY_PATH = "/vortex/vortex" + level
     LOCAL = True
     return s
 
+def load_downloaded_files():
+    global elf
+    global libc
+    elf = ELF(local_binary)
+    libc = ELF(local_libc)
+    context.clear()
+    context.binary = local_binary
+    context.log_file = "/tmp/docgillog"
 
-def compose_downloaded_files(level):
+def compose_download_paths(level):
     global remote_binary
     global local_dir
     global local_binary
@@ -79,13 +88,8 @@ def compose_downloaded_files(level):
     local_dir = "/home/kali/PycharmProjects/vortex/" + level
     remote_binary = "/vortex/vortex" + level
     local_binary = local_dir + remote_binary
-    local_libc = local_dir + "/lib32/libc-2.19.so"
+    local_libc = local_dir + "/lib32/libc.so.6"
     log.info(f"cloned_binary: {local_binary}")
-    elf = ELF(local_binary)
-    libc = ELF(local_libc)
-    context.clear()
-    context.binary = local_binary
-    context.log_file = "/tmp/docgillog"
 
 
 def to_clipboard(data):

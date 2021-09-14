@@ -1,0 +1,15 @@
+
+set disassembly-flavor intel   
+alias gil = disassemble
+#alias gili = x/2i
+#alias gilr = 'x/2wx $ebp'
+
+
+# unset env
+show env
+
+b *exit
+# printf call in vuln
+b *0x0804861c
+# shell sleep 2
+# r < /tmp/format-docgil
