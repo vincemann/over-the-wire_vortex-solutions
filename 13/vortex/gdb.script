@@ -1,15 +1,40 @@
 
+set follow-fork-mode child
 set disassembly-flavor intel   
 alias gil = disassemble
+
 #alias gili = x/2i
 #alias gilr = 'x/2wx $ebp'
 
 
-# unset env
-show env
+# break at main
+b *main
+# run wrapper with symlink as arg, pipe input later into forked vortex process
+r `cat /tmp/docgil-raw` < /tmp/docgil
+
+b *execve
+c
+si
+si
+del
+break *main
+
+c
+# now in main from vortex prog
+
+
+# # char checking 
+# break *0x080485f7
+# commands
+# shell echo "checking char at index"
+# i r edx
+# shell echo "press c to continue"
+# end
 
 b *exit
-# printf call in vuln
-b *0x0804861c
-# shell sleep 2
-# r < /tmp/format-docgil
+b *printf
+
+# c
+# brings us to char checking breakpoint
+
+# before free now
