@@ -6,6 +6,8 @@ alias gil = disassemble
 #alias gili = x/2i
 #alias gilr = 'x/2wx $ebp'
 
+unset env
+show env
 
 # break at main
 b *main
@@ -21,6 +23,35 @@ break *main
 
 c
 # now in main from vortex prog
+# calling fgets
+b *0x080485bf
+b *exit
+b *printf
+# free plt
+b *0x8048420
+
+
+c
+# now in fgets
+# finish
+# now in vuln before free 
+
+
+# echo "got of free:"
+# x/1wx 0x0804a010
+# # at vuln
+# b *0x08048593
+# 
+# 
+# c
+# c
+# c
+# si
+# finish
+# 
+# shell echo "buf:"
+# x/s 0x804c5e0
+
 
 
 # # char checking 
@@ -30,11 +61,5 @@ c
 # i r edx
 # shell echo "press c to continue"
 # end
-
-b *exit
-b *printf
-
 # c
 # brings us to char checking breakpoint
-
-# before free now

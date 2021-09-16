@@ -71,9 +71,9 @@ int main(int argc, char** argv)
     // printf("storing on stack: %s\n in hex:",base_name);
     // printBytes(base_name,strlen(base_name));
 
-    char* base_name = basename(argv[1]);
-    printf("program name: %s\n in hex:",base_name);
-    printBytes(base_name,strlen(base_name));
+//    char* base_name = basename(argv[1]);
+//    printf("program name: %s\n in hex:",base_name);
+//    printBytes(base_name,strlen(base_name));
 
     // return 0x42;
     char* programArgv[] = {NULL};
