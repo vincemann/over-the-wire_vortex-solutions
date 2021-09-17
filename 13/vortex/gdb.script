@@ -23,22 +23,25 @@ break *main
 
 c
 # now in main from vortex prog
-# calling fgets
-b *0x080485bf
+
+# # calling fgets
+# b *0x080485bf
+
+# at vuln malloc
+b *0x080485a0
+
 b *exit
 b *printf
-# free plt
-b *0x8048420
+b *malloc
+b *fgets
 
-
-c
-# now in fgets
+# c
 # finish
-# now in vuln before free 
-
-
 # echo "got of free:"
 # x/1wx 0x0804a010
+
+
+
 # # at vuln
 # b *0x08048593
 # 

